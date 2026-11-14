@@ -19,6 +19,30 @@ const server = createServer(async (request, response) => {
     return;
   }
 
+  const requestUrl = new URL(request.url, `http://localhost:${port}`);
+  if (requestUrl.pathname.startsWith('/api/horizons/')) {
+    let siteId;
+    try {
+      siteId = decodeURIComponent(requestUrl.pathname.slice('/api/horizons/'.length));
+    } catch {
+      response.writeHead(400).end(JSON.stringify({ error: 'Invalid site ID' }));
+      return;
+    }
+    if (!/^[a-z0-9-]+$/i.test(siteId)) {
+      response.writeHead(400).end(JSON.stringify({ error: 'Invalid site ID' }));
+      return;
+    }
+
+    try {
+      const horizonPath = fileURLToPath(new URL(`./data/${siteId}.json`, import.meta.url));
+      const horizon = await readFile(horizonPath, 'utf8');
+      response.writeHead(200).end(horizon);
+    } catch {
+      response.writeHead(404).end(JSON.stringify({ error: `Horizon data not found for ${siteId}` }));
+    }
+    return;
+  }
+
   if (request.url === '/api/sites') {
     try {
       const sites = await readFile(sitesPath, 'utf8');

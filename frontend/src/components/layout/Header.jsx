@@ -15,7 +15,7 @@ export default function Header({ profile, onProfileChange, onMenu, onSearch }) {
       </div>
 
       <div className="brand">
-        <div className="brand-name"><span>ASTRO</span><b>NAV</b></div>
+        <div className="brand-name"><span>LU</span><b>NAV</b></div>
         <div className="brand-sub">{'// LUNAR LANDING Site selector'}</div>
       </div>
 

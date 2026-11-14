@@ -12,7 +12,7 @@ export default function MissionOverview({ status = 'NOMINAL', solarWindow = '--'
         <div className="overview-item">EARTH LINK: <b>{earthLink}</b><b className="delay">{delay}</b></div>
       </div>
       <div className="legal">
-        <span>© ASTRONAV INCORPORATED</span>
+        <span>© LUNAV</span>
         <span className="legal-icons"><Info size={13} /><Info size={13} /></span>
       </div>
     </footer>

@@ -1,0 +1,21 @@
+{
+  "siteId": "shackleton",
+  "name": "Shackleton Rim",
+  "coordinates": {
+    "latitude": -89.54,
+    "longitude": 0.00
+  },
+  "metrics": {
+    "solarElevation": 1.2,
+    "earthVisibility": "Active (DTE)",
+    "solarWindowHours": 42.25,
+    "earthLinkHours": 118.5
+  },
+  "horizonProfile": [
+    { "azimuth": 0, "elevation": 1.5 },
+    { "azimuth": 90, "elevation": 3.0 },
+    { "azimuth": 180, "elevation": -1.0 },
+    { "azimuth": 270, "elevation": 2.2 },
+    { "azimuth": 360, "elevation": 1.5 }
+  ]
+}

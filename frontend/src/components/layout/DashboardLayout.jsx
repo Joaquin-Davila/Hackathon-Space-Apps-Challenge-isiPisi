@@ -9,7 +9,7 @@ import '../../styles/dashboard.css';
 
 const MISSION = { year: 2026, latitude: '84°S - 90°S', data: 'JPL HORIZONS / LOLA' };
 
-export default function DashboardLayout({ profile = 'astronaut', onProfileChange, view, onNavigate }) {
+export default function DashboardLayout({ profile = 'astronaut', onProfileChange, view, onNavigate, children }) {
   const { sites, loading, error } = useLunarSites();
   const [active, setActive] = useState(0);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -25,7 +25,11 @@ export default function DashboardLayout({ profile = 'astronaut', onProfileChange
         </div>
       )}
 
-      <main className="main">
+      {view === 'explorer' ? (
+        <main className="main mode-main">{children}</main>
+      ) : view === 'planner' ? (
+        <main className="main mode-main">{children}</main>
+      ) : <main className="main">
         <div className="intro">
           <h1>LUNAR SOUTH POLE</h1>
           <p>Select a candidate landing site to explore horizon</p>
@@ -39,11 +43,11 @@ export default function DashboardLayout({ profile = 'astronaut', onProfileChange
         {loading && <p className="state">Cargando sitios…</p>}
         {error && <p className="state">{error}</p>}
         {!loading && !error && (
-          <LunarScene sites={sites} activeIndex={active} onChange={setActive} onExplore={(site) => onNavigate?.('explorer', site)} />
+          <LunarScene sites={sites} activeIndex={active} onChange={setActive} onExploreHorizon={(site) => onNavigate?.('explorer', site)} />
         )}
-      </main>
+      </main>}
 
-      <MissionOverview />
+      {view === 'dashboard' && <MissionOverview />}
     </div>
   );
 }

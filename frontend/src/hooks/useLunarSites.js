@@ -12,10 +12,17 @@ export default function useLunarSites() {
   const [sourceAvailable, setSourceAvailable] = useState(false);
   useEffect(() => {
     let active = true;
-    fetch('/data/sites.json').then((response) => {
-      if (!response.ok) throw new Error('Sites data unavailable');
-      return response.json();
-    }).then((data) => {
+    const readSites = async () => {
+      // Prefer the API, while keeping the static JSON as a no-backend fallback.
+      for (const url of ['/api/sites', '/data/sites.json']) {
+        try {
+          const response = await fetch(url);
+          if (response.ok) return response.json();
+        } catch { /* Try the next source. */ }
+      }
+      throw new Error('Sites data unavailable');
+    };
+    readSites().then((data) => {
       const rows = Array.isArray(data) ? data : data.sites;
       if (active && Array.isArray(rows) && rows.length) {
         const normalized = rows.map(normalizeSite);

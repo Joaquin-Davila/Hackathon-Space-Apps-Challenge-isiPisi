@@ -1,40 +1,38 @@
+// frontend/src/hooks/useLunarSites.js
 import { useEffect, useState } from 'react';
-import { normalizeSite } from '../utils/lunarHelpers.js';
+import { normalizeSite } from '../lunarHelpers.js';
 
-const candidates = [
-  { id: 'shackleton-rim', name: 'Shackleton Rim' },
-  { id: 'connecting-ridge', name: 'Connecting Ridge' },
-  { id: 'malapert-massif', name: 'Malapert Massif' },
+const SOURCES = ['/api/sites', '/data/sites.json'];
+const FALLBACK_SITES = [
+  { id: 'shackleton-rim', name: 'Shackleton Rim', lat: null, lon: null, markers: [] },
+  { id: 'connecting-ridge', name: 'Connecting Ridge', lat: null, lon: null, markers: [] },
+  { id: 'malapert-massif', name: 'Malapert Massif', lat: null, lon: null, markers: [] },
 ];
 
-export default function useLunarSites() {
-  const [sites, setSites] = useState(candidates.map(normalizeSite));
-  const [sourceAvailable, setSourceAvailable] = useState(false);
+export function useLunarSites() {
+  const [state, setState] = useState({ sites: [], loading: true, error: null });
+
   useEffect(() => {
-    let active = true;
-    const readSites = async () => {
-      // Prefer the API, while keeping the static JSON as a no-backend fallback.
-      for (const url of ['/api/sites', '/data/sites.json']) {
+    let cancelled = false;
+    (async () => {
+      for (const url of SOURCES) {
         try {
-          const response = await fetch(url);
-          if (response.ok) return response.json();
-        } catch { /* Try the next source. */ }
+          const res = await fetch(url);
+          if (!res.ok) continue;
+          const json = await res.json();
+          const list = Array.isArray(json) ? json : json.sites;
+          if (list?.length) {
+            if (!cancelled) setState({ sites: list.map(normalizeSite), loading: false, error: null });
+            return;
+          }
+        } catch {
+          /* prueba la siguiente fuente */
+        }
       }
-      throw new Error('Sites data unavailable');
-    };
-    readSites().then((data) => {
-      const rows = Array.isArray(data) ? data : data.sites;
-      if (active && Array.isArray(rows) && rows.length) {
-        const normalized = rows.map(normalizeSite);
-        // Preserve the requested candidate names where the data file only contains coordinates.
-        setSites(candidates.map((candidate, index) => {
-          const entry = normalized.find((site) => site.id === candidate.id) ?? normalized[index];
-          return entry ? { ...candidate, latitude: entry.latitude, longitude: entry.longitude } : candidate;
-        }));
-        setSourceAvailable(true);
-      }
-    }).catch(() => { /* Empty source means coordinates remain unavailable. */ });
-    return () => { active = false; };
+      if (!cancelled) setState({ sites: FALLBACK_SITES.map(normalizeSite), loading: false, error: null });
+    })();
+    return () => { cancelled = true; };
   }, []);
-  return { sites, sourceAvailable };
+
+  return state;
 }

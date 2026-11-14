@@ -1,4 +1,20 @@
-import MissionStatus from './MissionStatus.jsx';
-import SolarWindow from './SolarWindow.jsx';
-import EarthLinkStatus from './EarthLinkStatus.jsx';
-export default function MissionOverview({ site }) { return <section className="mission-overview"><div className="overview-heading"><span>MISSION OVERVIEW</span><span>LIVE TELEMETRY <i className="status-dot muted"/></span></div><div className="overview-grid"><MissionStatus/><SolarWindow/><EarthLinkStatus/><div className="overview-item active-site"><span className="overview-label">ACTIVE LANDING SITE</span><b>{site.name.toUpperCase()}</b><small>{site.latitude == null || site.longitude == null ? 'COORDINATES PENDING SOURCE DATA' : 'COORDINATES VERIFIED'}</small></div></div></section>; }
+// frontend/src/components/dashboard/MissionOverview.jsx
+// Barra de estado inferior. Reemplaza a MissionStatus / SolarWindow / EarthLinkStatus
+// (puedes borrar esos tres archivos o dejarlos sin usar).
+import { Info } from 'lucide-react';
+
+export default function MissionOverview({ status = 'NOMINAL', solarWindow = '--', earthLink = '--', delay = '+1.2"' }) {
+  return (
+    <footer className="overview">
+      <div className="overview-bar">
+        <div className="overview-pill">MISSION STATUS: <b>{status}</b></div>
+        <div className="overview-item">SOLAR WINDOW: <b>{solarWindow}</b></div>
+        <div className="overview-item">EARTH LINK: <b>{earthLink}</b><b className="delay">{delay}</b></div>
+      </div>
+      <div className="legal">
+        <span>© ASTRONAV INCORPORATED</span>
+        <span className="legal-icons"><Info size={13} /><Info size={13} /></span>
+      </div>
+    </footer>
+  );
+}

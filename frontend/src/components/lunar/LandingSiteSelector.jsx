@@ -1,9 +1,33 @@
-import { useEffect } from 'react';
-import IconButton from '../ui/IconButton.jsx';
-
-export default function LandingSiteSelector({ sites, selectedSite, onSelect }) {
-  useEffect(() => { const handler = (event) => { const index = sites.findIndex((site) => site.name.toLowerCase().includes(event.detail.toLowerCase())); if (index >= 0) onSelect(index); }; window.addEventListener('lunav:search', handler); return () => window.removeEventListener('lunav:search', handler); }, [sites, onSelect]);
-  const index = sites.findIndex((site) => site.id === selectedSite.id);
-  const move = (step) => onSelect((index + step + sites.length) % sites.length);
-  return <div className="site-controls"><IconButton icon="previous" label="Previous landing site" onClick={() => move(-1)} /><div className="site-pips" aria-label="Choose landing site">{sites.map((site, i) => <button key={site.id} className={i === index ? 'selected' : ''} aria-label={`Select ${site.name}`} aria-pressed={i === index} onClick={() => onSelect(i)} />)}</div><IconButton icon="next" label="Next landing site" onClick={() => move(1)} /></div>;
+// frontend/src/components/lunar/LandingSiteSelector.jsx
+// Puntos de selección con línea guía y etiqueta, en coordenadas relativas (0–1) al globo.
+export default function LandingSiteSelector({ markers = [], onSelect }) {
+  if (!markers.length) return null;
+  return (
+    <div className="markers">
+      <svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+        {markers.map((m, i) => (
+          <line key={i} x1={m.x * 100} y1={m.y * 100} x2={m.lx * 100} y2={m.ly * 100} vectorEffect="non-scaling-stroke" />
+        ))}
+      </svg>
+      {markers.map((m, i) => (
+        <button
+          key={i}
+          type="button"
+          className="marker-dot"
+          style={{ left: `${m.x * 100}%`, top: `${m.y * 100}%` }}
+          aria-label={m.label}
+          onClick={(e) => { e.stopPropagation(); onSelect?.(m); }}
+        />
+      ))}
+      {markers.map((m, i) => (
+        <span
+          key={`l${i}`}
+          className={`marker-label ${m.align === 'end' ? 'is-end' : ''}`}
+          style={{ left: `${m.lx * 100}%`, top: `${m.ly * 100}%` }}
+        >
+          {m.label}
+        </span>
+      ))}
+    </div>
+  );
 }

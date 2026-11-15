@@ -6,14 +6,30 @@ import './styles/dashboard.css';
 
 export default function App() {
   const [view, setView] = useState('dashboard');
-  const [profile, setProfile] = useState('STUDENT');
+  const [profile, setProfile] = useState('astronaut');
   const [selectedSite, setSelectedSite] = useState(null);
+
   const navigate = (nextView, site) => {
     if (site) setSelectedSite(site);
     setView(nextView);
   };
 
-  return <DashboardLayout view={view} onNavigate={navigate} profile={profile} onProfileChange={setProfile}>
-    {view === 'explorer' ? <ExplorerMode site={selectedSite} onBack={() => setView('planner')} /> : view === 'planner' ? <PlannerMode onBack={() => setView('dashboard')} /> : null}
-  </DashboardLayout>;
+  return (
+    <DashboardLayout
+      view={view}
+      onNavigate={navigate}
+      profile={profile}
+      onProfileChange={setProfile}
+    >
+      {view === 'explorer' ? (
+        <ExplorerMode
+          site={selectedSite}
+          profile={profile}
+          onBack={() => setView('dashboard')}
+        />
+      ) : view === 'planner' ? (
+        <PlannerMode onBack={() => setView('dashboard')} />
+      ) : null}
+    </DashboardLayout>
+  );
 }

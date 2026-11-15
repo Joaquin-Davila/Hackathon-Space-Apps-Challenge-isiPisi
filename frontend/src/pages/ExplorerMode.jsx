@@ -1,101 +1,239 @@
-import { useEffect, useState } from 'react';
-import { ArrowLeft, Compass } from 'lucide-react';
+import React, { useEffect, useState, useMemo } from 'react';
+import { ArrowLeft, Compass, ShieldAlert, Sparkles, SlidersHorizontal, RefreshCw } from 'lucide-react';
 import HorizonProfileChart from '../components/lunar/HorizonProfileChart.jsx';
-import { getHorizonData } from '../services/horizonsService.js';
+import TacticalTelemetry from '../components/lunar/TacticalTelemetry.jsx';
+import EphemerisTimeline from '../components/lunar/EphemerisTimeline.jsx';
+import SiteOverlaySelector from '../components/lunar/SiteOverlaySelector.jsx';
+import { getHorizonData, CANDIDATE_SITES_CATALOG } from '../services/horizonsService.js';
+import {
+  evaluateSiteTelemetry,
+  DEFAULT_MISSION_EPOCH,
+} from '../services/ephemerisEngine.js';
 
-const DEFAULT_SITE = { id: 'shackleton-rim', name: 'Shackleton Rim' };
-const DATA_SOURCE = 'JPL HORIZONS / LRO LOLA DEM';
+const DEFAULT_SITE = {
+  id: 'shackleton-rim',
+  siteId: 'shackleton',
+  name: 'Shackleton Rim',
+  lat: -89.54,
+  lon: 0.0,
+  elevation: 4218,
+};
 
-function formatCoordinate(value, axis) {
-  if (value == null || value === '' || !Number.isFinite(Number(value))) return '—';
-  const numericValue = Number(value);
-  const direction = axis === 'latitude'
-    ? (numericValue < 0 ? 'S' : 'N')
-    : (numericValue < 0 ? 'W' : 'E');
-  return `${Math.abs(numericValue).toFixed(2)}° ${direction}`;
-}
+export default function ExplorerMode({ site = DEFAULT_SITE, profile = 'astronaut', onBack }) {
+  // Normalize primary site ID
+  const activeSite = site || DEFAULT_SITE;
+  const primaryId = activeSite.horizonId ?? activeSite.siteId ?? String(activeSite.id ?? 'shackleton').replace(/-rim$/, '');
 
-function formatNumber(value, suffix = '') {
-  return value == null || value === '' || !Number.isFinite(Number(value)) ? '—' : `${Number(value)}${suffix}`;
-}
+  // State: Loading & Data
+  const [primaryState, setPrimaryState] = useState({ loading: true, data: null });
+  const [overlaySiteId, setOverlaySiteId] = useState(null);
+  const [overlayState, setOverlayState] = useState({ loading: false, data: null });
 
-function Metadata({ label, children }) {
-  return <div className="explorer-meta-row"><span>{label}</span><b>{children || 'NOT PROVIDED'}</b></div>;
-}
+  // State: Temporal offset (in hours from mission epoch)
+  const [hoursOffset, setHoursOffset] = useState(0);
 
-export default function ExplorerMode({ site = DEFAULT_SITE, onBack }) {
-  const siteId = site.horizonId ?? site.siteId ?? String(site.id ?? 'shackleton').replace(/-rim$/, '');
-  const [state, setState] = useState({ loading: true, data: null });
-
+  // Fetch Primary Site Horizon Data
   useEffect(() => {
     let cancelled = false;
-    setState({ loading: true, data: null });
-    getHorizonData(siteId).then((data) => {
-      if (!cancelled) setState({ loading: false, data });
-    });
-    return () => { cancelled = true; };
-  }, [siteId]);
+    setPrimaryState({ loading: true, data: null });
 
-  const { loading, data } = state;
-  const coordinates = data?.coordinates;
-  const latitude = Number.isFinite(site.lat) ? site.lat : coordinates?.latitude;
-  const longitude = Number.isFinite(site.lon) ? site.lon : coordinates?.longitude;
-  const metrics = data?.metrics ?? {};
-  const profile = Array.isArray(data?.horizonProfile) ? data.horizonProfile : [];
+    getHorizonData(primaryId).then((data) => {
+      if (!cancelled) {
+        setPrimaryState({ loading: false, data });
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [primaryId]);
+
+  // Fetch Alternative Overlay Site Horizon Data
+  useEffect(() => {
+    if (!overlaySiteId) {
+      setOverlayState({ loading: false, data: null });
+      return;
+    }
+
+    let cancelled = false;
+    setOverlayState({ loading: true, data: null });
+
+    getHorizonData(overlaySiteId).then((data) => {
+      if (!cancelled) {
+        setOverlayState({ loading: false, data });
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [overlaySiteId]);
+
+  const { loading: primaryLoading, data: primaryData } = primaryState;
+  const { data: overlayData } = overlayState;
+
+  // Active coordinates
+  const latitude = Number.isFinite(activeSite.lat) ? activeSite.lat : (primaryData?.coordinates?.latitude ?? -89.54);
+  const longitude = Number.isFinite(activeSite.lon) ? activeSite.lon : (primaryData?.coordinates?.longitude ?? 0.0);
+  const elevation = Number.isFinite(activeSite.elevation) ? activeSite.elevation : (primaryData?.coordinates?.elevation ?? 4218);
+
+  const effectivePrimarySite = useMemo(() => ({
+    ...activeSite,
+    id: activeSite.id ?? primaryId,
+    name: primaryData?.name ?? activeSite.name,
+    lat: latitude,
+    lon: longitude,
+    elevation,
+  }), [activeSite, primaryId, primaryData, latitude, longitude, elevation]);
+
+  const primaryProfile = primaryData?.horizonProfile ?? [];
+
+  // Find overlay site details
+  const overlaySiteObj = useMemo(() => {
+    if (!overlaySiteId) return null;
+    const catalogItem = CANDIDATE_SITES_CATALOG.find((s) => s.id === overlaySiteId || s.defaultHorizon === overlaySiteId);
+    return {
+      ...(catalogItem || { id: overlaySiteId, name: overlaySiteId }),
+      name: overlayData?.name ?? catalogItem?.name ?? overlaySiteId,
+      lat: overlayData?.coordinates?.latitude ?? catalogItem?.lat ?? -89.44,
+      lon: overlayData?.coordinates?.longitude ?? catalogItem?.lon ?? 0,
+      elevation: overlayData?.coordinates?.elevation ?? catalogItem?.elevation ?? 4200,
+    };
+  }, [overlaySiteId, overlayData]);
+
+  const overlayProfile = overlayData?.horizonProfile ?? [];
+
+  // Calculate high-precision Ephemeris Telemetry for Primary Site
+  const primaryTelemetry = useMemo(() => {
+    return evaluateSiteTelemetry(effectivePrimarySite, primaryProfile, hoursOffset);
+  }, [effectivePrimarySite, primaryProfile, hoursOffset]);
+
+  // Calculate high-precision Ephemeris Telemetry for Overlay Site
+  const overlayTelemetry = useMemo(() => {
+    if (!overlaySiteObj || !overlayProfile.length) return null;
+    return evaluateSiteTelemetry(overlaySiteObj, overlayProfile, hoursOffset);
+  }, [overlaySiteObj, overlayProfile, hoursOffset]);
 
   return (
-    <section className="mode-panel explorer-panel" aria-labelledby="explorer-title">
-      <button className="back-link" type="button" onClick={onBack}>
-        <ArrowLeft size={15} /> BACK TO PLANNER
-      </button>
+    <div className="astronaut-explorer-shell" aria-labelledby="explorer-main-title">
+      {/* Top Bar with Minimalist Navigation & Mission Heading */}
+      <header className="explorer-editorial-header">
+        <div className="header-top-nav">
+          <button className="minimal-back-btn" type="button" onClick={onBack}>
+            <ArrowLeft size={14} />
+            <span>MISSION CONTROL // RETURN</span>
+          </button>
 
-      <header className="explorer-heading">
-        <div className="eyebrow"><span /> LUNAR SURFACE ANALYSIS</div>
-        <div className="explorer-title-row">
-          <Compass className="mode-icon" size={25} aria-hidden="true" />
-          <div>
-            <h1 id="explorer-title">EXPLORER MODE</h1>
-            <p className="mode-lede">360° horizon and terrain telemetry · {data?.name ?? site.name}</p>
+          <div className="profile-indicator-tag">
+            <span className="tag-pulse" />
+            <span className="tag-text">
+              MODE: {profile.toUpperCase()} · JPL HORIZONS / LOLA DEM
+            </span>
+          </div>
+        </div>
+
+        <div className="header-editorial-title-row">
+          <div className="editorial-title-col">
+            <div className="editorial-kicker">
+              <span>LUNAR SOUTH POLE // 360° EPHEMERIS & HORIZON TELEMETRY</span>
+            </div>
+            <h1 id="explorer-main-title" className="editorial-headline">
+              {effectivePrimarySite.name}
+            </h1>
+            <p className="editorial-subhead">
+              High-resolution topographical horizon clearance, real-time Sun & Earth vectors, and schedule contingency analysis.
+            </p>
+          </div>
+
+          <div className="editorial-quick-coords">
+            <div className="quick-coord-item">
+              <span className="coord-label">LAT</span>
+              <span className="coord-val">
+                {Math.abs(latitude).toFixed(3)}° {latitude < 0 ? 'S' : 'N'}
+              </span>
+            </div>
+            <div className="quick-coord-item">
+              <span className="coord-label">LON</span>
+              <span className="coord-val">
+                {Math.abs(longitude).toFixed(3)}° {longitude < 0 ? 'W' : 'E'}
+              </span>
+            </div>
+            <div className="quick-coord-item">
+              <span className="coord-label">ELEV</span>
+              <span className="coord-val">+{elevation.toLocaleString()} M</span>
+            </div>
           </div>
         </div>
       </header>
 
-      {loading ? (
-        <p className="explorer-state" role="status">LOADING HORIZON DATA…</p>
-      ) : data ? (
-        <div className="explorer-workspace">
-          <HorizonProfileChart profile={profile} data={data} />
-          <aside className="explorer-sidebar" aria-label="Site and mission metadata">
-            <section className="explorer-info-block">
-              <h2>SITE METADATA</h2>
-              <Metadata label="TARGET">{data.name ?? site.name}</Metadata>
-              <Metadata label="LATITUDE">{formatCoordinate(latitude, 'latitude')}</Metadata>
-              <Metadata label="LONGITUDE">{formatCoordinate(longitude, 'longitude')}</Metadata>
-              <Metadata label="DATA SOURCE">{data.source ?? DATA_SOURCE}</Metadata>
-            </section>
-
-            <section className="explorer-info-block">
-              <h2>ILLUMINATION / LINK</h2>
-              <Metadata label="SOLAR ELEVATION">{formatNumber(metrics.solarElevation, '°')}</Metadata>
-              <Metadata label="SOLAR AZIMUTH">{formatNumber(metrics.solarAzimuth ?? data.solarAzimuth, '°')}</Metadata>
-              <Metadata label="EARTH AZIMUTH">{formatNumber(metrics.earthAzimuth ?? data.earthAzimuth, '°')}</Metadata>
-              <Metadata label="DIRECT TO EARTH">{metrics.earthVisibility ?? 'NOT PROVIDED'}</Metadata>
-              <Metadata label="SOLAR WINDOW">{formatNumber(metrics.solarWindowHours, ' h')}</Metadata>
-              <Metadata label="EARTH LINK">{formatNumber(metrics.earthLinkHours, ' h')}</Metadata>
-            </section>
-          </aside>
+      {/* Main Workspace */}
+      {primaryLoading ? (
+        <div className="explorer-loading-state" role="status">
+          <RefreshCw className="spin-icon" size={24} />
+          <span>INITIALIZING LOLA TOPOGRAPHY & EPHEMERIS PROPAGATION…</span>
         </div>
+      ) : primaryData ? (
+        <main className="explorer-editorial-workspace">
+          {/* 1. Rapid Site Overlay Selector Toolbar */}
+          <SiteOverlaySelector
+            primarySite={effectivePrimarySite}
+            overlaySiteId={overlaySiteId}
+            onSelectOverlaySite={setOverlaySiteId}
+            primaryTelemetry={primaryTelemetry}
+            overlayTelemetry={overlayTelemetry}
+          />
+
+          {/* 2. 360° Panoramic Horizon & Ephemeris Chart */}
+          <HorizonProfileChart
+            primarySite={effectivePrimarySite}
+            primaryProfile={primaryProfile}
+            primaryTelemetry={primaryTelemetry}
+            overlaySite={overlaySiteObj}
+            overlayProfile={overlayProfile}
+            overlayTelemetry={overlayTelemetry}
+          />
+
+          {/* 3. Ephemeris Timeline & Schedule Contingency Scrubber (+3d, +7d, +14d) */}
+          <EphemerisTimeline
+            hoursOffset={hoursOffset}
+            onChangeHoursOffset={setHoursOffset}
+            baseDate={DEFAULT_MISSION_EPOCH}
+          />
+
+          {/* 4. Tactical Telemetry Panel (Astronaut Monospace Channels) */}
+          <TacticalTelemetry
+            telemetry={primaryTelemetry}
+            profile={profile}
+          />
+        </main>
       ) : (
-        <div className="mode-data-state">
-          <i />
-          <div>
-            <b>HORIZON DATA NOT AVAILABLE</b>
-            <span>No hay un perfil para {site.name}. Agrega datos verificados en <code>backend/data/{siteId}.json</code>; el panel no genera topografía sintética.</span>
+        <div className="explorer-error-notice">
+          <ShieldAlert size={28} className="error-icon" />
+          <div className="error-body">
+            <h3>HORIZON TELEMETRY OFFLINE</h3>
+            <p>
+              No verified LOLA elevation profile was returned for <code>{effectivePrimarySite.name}</code>.
+              Check that dataset <code>backend/data/{primaryId}.json</code> is populated.
+            </p>
           </div>
         </div>
       )}
 
-      <div className="mode-footnote">MISSION ANALYSIS · {DATA_SOURCE}</div>
-    </section>
+      {/* Minimal Editorial Footer */}
+      <footer className="explorer-editorial-footer">
+        <div className="footer-meta-item">
+          <span>DATA REF:</span>
+          <b>NASA JPL HORIZONS #301 · TARGET 10 (SUN) · TARGET 399 (EARTH)</b>
+        </div>
+        <div className="footer-meta-item">
+          <span>TOPOGRAPHY:</span>
+          <b>LRO LOLA GDR 128 PPD POLAR STEREOGRAPHIC DEM</b>
+        </div>
+        <div className="footer-meta-item">
+          <span>TEAM:</span>
+          <b>isiPisi // NASA SPACE APPS CHALLENGE</b>
+        </div>
+      </footer>
+    </div>
   );
 }
